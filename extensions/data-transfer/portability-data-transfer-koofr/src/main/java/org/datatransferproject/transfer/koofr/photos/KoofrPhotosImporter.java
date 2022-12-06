@@ -174,10 +174,15 @@ public class KoofrPhotosImporter
 
         try {
           long inputStreamBytes = inputStreamWrapper.getBytes();
-          response = ItemImportResult.success(
-                  koofrClient.uploadFile(
-                  parentPath, title, inMemoryInputStream, photo.getMediaType(), dateCreated, description),
-                  inputStreamBytes);
+          String stringResult = koofrClient.uploadFile(
+                  parentPath, title, inMemoryInputStream, photo.getMediaType(), dateCreated, description);
+          if (stringResult != null && !stringResult.isEmpty()) {
+            response = ItemImportResult.success(
+                    stringResult,
+                    inputStreamBytes);
+          } else {
+            response = ItemImportResult.success("skipped-" + photo.getDataId());
+          }
           size = inputStreamBytes;
         } catch (KoofrClientIOException exception) {
           if (exception.getCode() == 404) {

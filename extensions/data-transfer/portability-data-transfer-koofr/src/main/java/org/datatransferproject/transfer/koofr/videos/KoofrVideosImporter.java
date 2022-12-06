@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.LongAdder;
 import org.datatransferproject.api.launcher.Monitor;
 import org.datatransferproject.spi.cloud.connection.ConnectionProvider;
 import org.datatransferproject.spi.cloud.storage.JobStore;
-import org.datatransferproject.spi.cloud.storage.TemporaryPerJobDataStore;
+import org.datatransferproject.spi.cloud.storage.TemporaryPerJobDataStore.InputStreamWrapper;
 import org.datatransferproject.spi.transfer.idempotentexecutor.IdempotentImportExecutor;
 import org.datatransferproject.spi.transfer.idempotentexecutor.ItemImportResult;
 import org.datatransferproject.spi.transfer.provider.ImportResult;
@@ -44,6 +44,8 @@ import org.datatransferproject.types.transfer.auth.TokensAndUrlAuthData;
  */
 public class KoofrVideosImporter
     implements Importer<TokensAndUrlAuthData, VideosContainerResource> {
+
+  private static final String SKIPPED_FILE_RESULT_FORMAT = "skipped-%s";
 
   private final KoofrClientFactory koofrClientFactory;
   private final ConnectionProvider connectionProvider;
@@ -122,10 +124,9 @@ public class KoofrVideosImporter
       KoofrClient koofrClient)
       throws IOException, InvalidTokenException, DestinationMemoryFullException {
     monitor.debug(() -> String.format("Import single video %s", video.getName()));
-    Long size = null;
 
     try {
-      TemporaryPerJobDataStore.InputStreamWrapper inputStreamWrapper =
+      InputStreamWrapper inputStreamWrapper =
               connectionProvider.getInputStreamForItem(jobId, video);
       ItemImportResult<String> response;
       try (InputStream inputStream = inputStreamWrapper.getStream()) {
@@ -148,23 +149,24 @@ public class KoofrVideosImporter
         }
 
         long inputStreamBytes = inputStreamWrapper.getBytes();
-        response = ItemImportResult.success(koofrClient.uploadFile(
+        String responseResult = koofrClient.uploadFile(
                 parentPath,
                 name,
                 inputStream,
                 video.getEncodingFormat(),
                 video.getUploadedTime(),
-                description), inputStreamBytes);
-        size = inputStreamBytes;
-      } catch (FileNotFoundException e) {
-        monitor.info(
-                () -> String.format("Video resource was missing for id: %s", video.getDataId()), e);
-        throw e;
+                description);
+        if (responseResult != null && !responseResult.isEmpty()) {
+          response = ItemImportResult.success(responseResult, inputStreamBytes);
+        } else {
+          response = ItemImportResult.success(String.format(SKIPPED_FILE_RESULT_FORMAT, video.getDataId()));
+        }
       }
       return response;
     } catch (FileNotFoundException e) {
-      Long finalBytes = size;
-      return ItemImportResult.error(e, finalBytes);
+      monitor.info(
+              () -> String.format("Video resource was missing for id: %s", video.getDataId()), e);
+      return ItemImportResult.success(String.format(SKIPPED_FILE_RESULT_FORMAT, video.getDataId()));
     }
   }
 }

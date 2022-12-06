@@ -17,6 +17,7 @@
 package org.datatransferproject.types.common.models.social;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.datatransferproject.types.common.ImportableItem;
 
@@ -45,6 +46,7 @@ public class SocialActivityAttachment implements ImportableItem {
     return url;
   }
 
+  @JsonIgnore(false)
   public String getName() {
     return name;
   }
